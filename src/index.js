@@ -1,5 +1,7 @@
 // run the polyfills
 require('./polyfill');
+// require TweenJS
+require('../bower_components/TweenJS/lib/tweenjs-0.6.1.min.js');
 
 var core = module.exports = require('./core');
 

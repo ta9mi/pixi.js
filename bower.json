@@ -12,6 +12,7 @@
         "tasks"
     ],
     "dependencies": {
+      "TweenJS": "https://github.com/ta9mi/TweenJS.git#35f316c"
     },
     "devDependencies": {
     }

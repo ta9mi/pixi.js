@@ -108,6 +108,20 @@ Object.defineProperties(core, {
     /**
      * @class
      * @private
+     * @name PIXI.TimelineMovieClip
+     * @see {@link PIXI.TimelineMovieClip}
+     * @deprecated since version 3.0
+     */
+    TimelineMovieClip: {
+        get: function()
+        {
+            return extras.TimelineMovieClip;
+        }
+    },
+
+    /**
+     * @class
+     * @private
      * @name PIXI.TilingSprite
      * @see {@link PIXI.TilingSprite}
      * @deprecated since version 3.0
