@@ -49,7 +49,7 @@ function TimelineMovieClip(mode, startPosition, loop, labels) {
      */
     this.timeline = new window.createjs.Timeline(null, labels, {
         loop: this.loop,
-        paused: this.paused,
+        paused: true,
         position: startPosition,
         useTicks: true
     });
@@ -71,6 +71,54 @@ function TimelineMovieClip(mode, startPosition, loop, labels) {
     this.actionsEnabled = true;
 
     /**
+     * If true, the MovieClip will automatically be reset to its first frame whenever the timeline adds
+     * it back onto the display list. This only applies to MovieClip instances with mode=INDEPENDENT.
+     * <br><br>
+     * For example, if you had a character animation with a "body" child MovieClip instance
+     * with different costumes on each frame, you could set body.autoReset = false, so that
+     * you can manually change the frame it is on, without worrying that it will be reset
+     * automatically.
+     * @property autoReset
+     * @type Boolean
+     * @default true
+     */
+    this.autoReset = true;
+
+    /**
+     * An array of bounds for each frame in the MovieClip. This is mainly intended for tool output.
+     * @property frameBounds
+     * @type Array
+     * @default null
+     */
+    this.frameBounds = this.frameBounds||null; // TODO: Deprecated. This is for backwards support of FlashCC
+
+    /**
+     * By default MovieClip instances advance one frame per tick. Specifying a framerate for the MovieClip
+     * will cause it to advance based on elapsed time between ticks as appropriate to maintain the target
+     * framerate.
+     *
+     * For example, if a MovieClip with a framerate of 10 is placed on a Stage being updated at 40fps, then the MovieClip will
+     * advance roughly one frame every 4 ticks. This will not be exact, because the time between each tick will
+     * vary slightly between frames.
+     *
+     * This feature is dependent on the tick event object (or an object with an appropriate "delta" property) being
+     * passed into {{#crossLink "Stage/update"}}{{/crossLink}}.
+     * @property framerate
+     * @type {Number}
+     * @default null
+     **/
+    this.framerate = null;
+
+    // private properties:
+    /**
+     * @property _synchOffset
+     * @type Number
+     * @default 0
+     * @private
+     */
+    this._synchOffset = 0;
+
+    /**
      * @property _prevPos
      * @type Number
      * @default -1
@@ -85,6 +133,17 @@ function TimelineMovieClip(mode, startPosition, loop, labels) {
      * @private
      */
     this._prevPosition = 0;
+
+    /**
+     * The time remaining from the previous tick, only applicable when .framerate is set.
+     * @property _t
+     * @type Number
+     * @private
+     */
+    this._t = 0;
+
+    // add listener for tick event.
+    window.createjs.Ticker.addEventListener('tick', this.advance.bind(this));
 }
 TimelineMovieClip.prototype = Object.create(core.Container.prototype);
 TimelineMovieClip.prototype.constructor = TimelineMovieClip;
@@ -179,9 +238,48 @@ TimelineMovieClip.prototype.gotoAndStop = function(positionOrLabel) {
     this._goto(positionOrLabel);
 };
 
+/**
+ * Advances the playhead. This occurs automatically each tick by default.
+ * @param [time] {Number} The amount of time in ms to advance by. Only applicable if framerate is set.
+ * @method advance
+ */
+TimelineMovieClip.prototype.advance = function(time) {
+    // TODO: should we worry at all about clips who change their own modes via frame scripts?
+    var independent = TimelineMovieClip.INDEPENDENT;
+    if (this.mode !== independent) {
+        return;
+    }
+
+    var o = this, fps = o.framerate;
+    while ((o = o.parent) && (fps === null || fps === undefined)) {
+        if (o.mode === independent) {
+            fps = o._framerate;
+        }
+    }
+    this._framerate = fps;
+
+    var t = (fps !== null && fps !== undefined && fps !== -1 && time !== null && time !== undefined) ? time / (1000 / fps) + this._t : 1;
+    var frames = t || 0;
+    this._t = t - frames; // leftover time
+
+    while (!this.paused && frames--) {
+        this._prevPosition = (this._prevPos < 0) ? 0 : this._prevPosition+1;
+        this._updateTimeline();
+    }
+};
+
 //
 // private methods
 //
+/**
+ * @method _tick
+ * @param {Object} evtObj An event object that will be dispatched to all tick listeners. This object is reused between dispatchers to reduce construction & GC costs.
+ * function.
+ * @protected
+ **/
+TimelineMovieClip.prototype._tick = function(evtObj) {
+    this.advance(evtObj && evtObj.delta);
+};
 /**
  * @method _goto
  * @param {String|Number} positionOrLabel The animation name or frame number to go to.
@@ -192,7 +290,12 @@ TimelineMovieClip.prototype._goto = function(positionOrLabel) {
     if (pos === undefined || pos === null) {
         return;
     }
-    this.timeline.gotoAndPlay(pos);
+    if (this._prevPos === -1) {
+      this._prevPos = NaN;
+    }
+    this._prevPosition = pos;
+    this._t = 0;
+    this._updateTimeline();
 };
 
 /**
