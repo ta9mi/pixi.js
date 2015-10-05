@@ -1,7 +1,7 @@
 {
     "name": "pixi.js",
 
-    "main": "bin/pixi.js",
+    "main": "bin/pixi.min.js",
 
     "ignore": [
         "**/.*",
